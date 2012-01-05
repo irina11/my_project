@@ -1,11 +1,5 @@
 <?php
 session_start();
-
-define('DB_HOST', 'mysql2.000webhost.com');
-define('DB_USER', 'a5633986_irina');
-define('DB_PASS', 'accept11');
-define('DB_NAME', 'a5633986_blog');
-
 define('BLOG_USER', 'admin');
 define('BLOG_PASS', '111');
 
@@ -13,19 +7,18 @@ $flag = 0;
 
 header("Content-type: text/html; charset=utf-8");
 
-$conn = mysql_connect(DB_HOST, DB_USER, DB_PASS);
+require_once 'databases/Database.php';
+require_once 'databases/mysql/MySqlDb.php';
+require_once 'databases/mysql/TableGateway.php';
+require_once 'databases/mysql/blog_posts.php'; 
+require_once 'databases/mysql/blog_posts_tags.php'; 
+require_once 'databases/mysql/blog_tags.php';
 
-if (!$conn) {
-    echo "Не удается подключиться к БД: " . mysql_error();
+$db=new MySqlDb(array("localhost","root","","blog"));
+if (!$db->MySqlDb())
+{
     exit;
 }
-
-if (!mysql_select_db(DB_NAME)) {
-    echo "Не удается выбрать БД: " . mysql_error();
-    exit;
-}
-
-mysql_query('SET NAMES utf8');
 
 function isLoggedUser()
 {
@@ -214,7 +207,7 @@ else
             
             break;
         
-        // view -- show one post by post Id
+      
         case 'view':
             
             $post = doQuery('SELECT * FROM blog_posts WHERE id = ' . intval($_GET['post_id']));
@@ -232,11 +225,21 @@ else
             
             if (isset($_POST) && isset($_POST['post']))
             {
-                $_POST['post']['title']   = addslashes($_POST['post']['title']);
-                $_POST['post']['content'] = addslashes($_POST['post']['content']);
+//----------------------------------------------------  
+                if (isset($arrayfields)) { unset($arrayfields);}
+                $arrayfields=array();
+                $arrayfields['title']=array();
+                $arrayfields['content']=array();
+                $arrayfields['title'][]=$_POST['post']['title'];
+                $arrayfields['content'][]=$_POST['post']['content'];
+                if (!isset($posts_tags))
+                {
+                  $posts_tags=new blog_posts_tags($db);  
+                } 
+                $posts_tags->insertTbl($arrayfields,'');
+//------------------------------------------------------
+                
                 $_POST['post']['tags']    = addslashes($_POST['post']['tags']);
-                $query = 'INSERT INTO blog_posts SET title = \'' . $_POST['post']['title'] .'\', content = \'' . $_POST['post']['content'] .'\'';
-                $result = doQuery($query);
                 
                 $postId = false;
                 
@@ -244,46 +247,59 @@ else
                 {
                     $postId = mysql_insert_id();
                 }
-                
+            
                 if ($postId)
                 {
                     $tagsList = explode(',', $_POST['post']['tags']);
                     $tagsList = array_map('trim', $tagsList);
                     
                     
-                    $tagsConditions = '';
                     $tagsConditionsIn = '';
+// --------------------------------                                
+                    if (isset($arrayfields)) { unset($arrayfields);}
+                    $arrayfields=array();
+                    $arrayfields['tag']=array();
+// --------------------------------     
                     foreach($tagsList as $tagNum => $tag)
                     {   
-                        $tagsConditions = $tagsConditions.'(\'' . $tag . '\')';
+// --------------------------------  
+                        $arrayfields['tag'][]=$tag;
+// --------------------------------                             
                         $tagsConditionsIn = $tagsConditionsIn.'\'' . $tag . '\''; 
                         if ($tagNum < count($tagsList) - 1)   
                         {
-                          $tagsConditions = $tagsConditions.',';
                           $tagsConditionsIn = $tagsConditionsIn.',' ;
                         } 
                     }
-                    
-                    $query = 'INSERT INTO blog_tags (tag) VALUES ' . $tagsConditions . ' ON DUPLICATE KEY UPDATE tag=tag';
-                    doQuery($query);
-                    
+//------------------------------------------------------
+                    if (!isset($blog_tags))
+                    {
+                       $blog_tags=new blog_tags($db);  
+                    } 
+                    $blog_tags->insertTbl($arrayfields,'tag=tag'); 
+//------------------------------------------------------                    
                     $query = 'SELECT id, tag FROM blog_tags WHERE tag IN (' . $tagsConditionsIn . ')';
                     $result = doQuery($query);
                     
                     if ($result)
                     {
-                        $postTags = array();
+// --------------------------------
+                        if (isset($arrayfields)) { unset($arrayfields);}
+                        $arrayfields=array();
+                        $arrayfields['post_id']=array();
+                        $arrayfields['tag_id']=array();
                         foreach($result as $tag)
                         {
-                            $postTags[] = '(' . $postId . ', ' . $tag['id'] . ')';
-                        }
-                        $postTags = implode(', ', $postTags);
-                        
-                        $query = 'DELETE FROM blog_posts_tags WHERE post_id = ' . $postId;
-                        doQuery($query);
-                        
-                        $query = 'INSERT INTO blog_posts_tags (post_id, tag_id) VALUES ' . $postTags;
-                        doQuery($query);
+                            $arrayfields['post_id'][]=$postId;
+                            $arrayfields['tag_id'][]=$tag['id'];
+                        }    
+                        if (!isset($posts_tags))
+                        {
+                          $posts_tags=new blog_posts_tags($db);  
+                        } 
+                        $posts_tags->deleteTbl(array('post_id'=>$postId));
+                        $posts_tags->insertTbl($arrayfields,'');
+// --------------------------------                        
                     }
                 }
                 
@@ -308,9 +324,13 @@ else
             {
                 redirect('?message=nopost');
             }
-            
-            doQuery('DELETE FROM blog_posts WHERE id = ' . intval($_POST['post_id']));
-            
+// --------------------------------
+            if (!isset($posts))
+            {
+             $posts=new blog_posts($db);  
+            } 
+            $posts->deleteTbl(array('id'=>$_POST['post_id']));
+// --------------------------------
             redirect('?');
             
             break;
@@ -324,50 +344,65 @@ else
             
             if (isset($_POST['post']))
             {
-                $_POST['post']['title']   = addslashes($_POST['post']['title']);
-                $_POST['post']['content'] = addslashes($_POST['post']['content']);
+                
+// --------------------------------
+                if (!isset($posts))
+                {
+                  $posts=new blog_posts($db);  
+                } 
+                $result =$posts->updateTbl(array('title'=>$_POST['post']['title'],'content'=>$_POST['post']['content']),array('id'=>$_POST['post']['post_id']));
+// --------------------------------        
+                
                 $_POST['post']['tags']    = addslashes($_POST['post']['tags']);
-                
-                $query = 'UPDATE blog_posts SET title = \'' . $_POST['post']['title'] .'\', content = \'' . $_POST['post']['content'] .'\' WHERE id = ' . intval($_POST['post']['post_id']);
-                
-                $result = doQuery($query);
-                
                 $tagsList = explode(',', $_POST['post']['tags']);
                 $tagsList = array_map('trim', $tagsList);
 
-                $tagsConditions = '';
+// --------------------------------                                
+                if (isset($arrayfields)) { unset($arrayfields);}
+                $arrayfields=array();
+                $arrayfields['tag']=array();
+// --------------------------------                                
                 $tagsConditionsIn = '';
                 foreach($tagsList as $tagNum => $tag)
                 {   
-                    $tagsConditions = $tagsConditions.'(\'' . $tag . '\')';
+// --------------------------------  
+                    $arrayfields['tag'][]=$tag;
+// --------------------------------                      
                     $tagsConditionsIn = $tagsConditionsIn.'\'' . $tag . '\''; 
                     if ($tagNum < count($tagsList) - 1)   
                     {
-                       $tagsConditions = $tagsConditions.',';
                        $tagsConditionsIn = $tagsConditionsIn.',' ;
                     } 
                 }
-                
-                $query = 'INSERT INTO blog_tags (tag) VALUES ' . $tagsConditions . ' ON DUPLICATE KEY UPDATE tag=tag';
-                doQuery($query);
-
+// --------------------------------  
+                if (!isset($blog_tags))
+                {
+                   $blog_tags=new blog_tags($db);  
+                } 
+                $blog_tags->insertTbl($arrayfields,'tag=tag'); 
+// --------------------------------                  
                 $query = 'SELECT id, tag FROM blog_tags WHERE tag IN (' . $tagsConditionsIn . ')';
                 $result = doQuery($query);
 
                 if ($result)
                 {
-                    $postTags = array();
+// --------------------------------
+                    if (!isset($posts_tags))
+                    {
+                       $posts_tags=new blog_posts_tags($db);  
+                    } 
+                    $posts_tags->deleteTbl(array('post_id'=>$_POST['post']['post_id']));
+                    if (isset($arrayfields)) { unset($arrayfields);}
+                    $arrayfields=array();
+                    $arrayfields['post_id']=array();
+                    $arrayfields['tag_id']=array();
                     foreach($result as $tag)
                     {
-                        $postTags[] = '(' . intval($_POST['post']['post_id']) . ', ' . $tag['id'] . ')';
-                    }
-                    $postTags = implode(', ', $postTags);
-
-                    $query = 'DELETE FROM blog_posts_tags WHERE post_id = ' . intval($_POST['post']['post_id']);
-                    doQuery($query);
-
-                    $query = 'INSERT INTO blog_posts_tags (post_id, tag_id) VALUES ' . $postTags;
-                    doQuery($query);
+                        $arrayfields['post_id'][]=$postId;
+                        $arrayfields['tag_id'][]=$tag['id'];
+                    }    
+                    $posts_tags->insertTbl($arrayfields,''); 
+// --------------------------------                    
                 }
 
                 if ($result)
@@ -411,7 +446,7 @@ else
             break;
     }
 }
-
-mysql_close($conn);
-
+// --------------------------------             
+$db->close();
+// --------------------------------             
 ?>
