@@ -9,7 +9,10 @@
 <?php else: ?>
     
     Wellcome, friend, you are autorized user!
-
+    <img id="pictureSmile" src="image/smile-17.gif" >
+    <input type="button" onclick="chimg()">
+    
+    
     <a href="?action=add">Добавить пост</a>
     <a href="?action=logout">Отмена авторизации</a>
 
@@ -40,7 +43,7 @@
         <?php foreach($postsList as $post): ?>
             <div class="post">
                 <div class="post-title">
-                    <a class="post-title" href="?action=view&post_id=<?php echo $post['id'] ?>"><?php echo $post['title'] ?></a>
+                    <a class="post-title" href="?action=view&post_id=<?php echo $post['id'] ?>" ><?php echo $post['title'] ?></a>
                 </div>
                 <div class="post-content">
                     <p class="Text">
@@ -52,7 +55,7 @@
                 <?php if (isset($post['tags'])): ?>
                     <div class="post-tags">
                         <?php foreach($post['tags'] as $tagNum => $tag): ?>
-                            <a class="post-tags" href="?action=tag&tag=<?php echo $tag ?>"><?php echo $tag ?></a><?php if ($tagNum < count($post['tags']) - 1): ?>, <?php endif ?>
+                            <a class="post-tags" href="?action=tag&tag=<?php echo $tag ?>" ><?php echo $tag ?></a><?php if ($tagNum < count($post['tags']) - 1): ?>, <?php endif ?>
                         <?php endforeach ?>
                     </div>
                 <?php endif ?>

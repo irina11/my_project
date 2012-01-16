@@ -23,6 +23,7 @@
             <span class="spanTags">теги разделяются запятыми</span>
         </div>
         
+                
         <div>
             <input type="submit" name="btn-add-post" value="Добавить пост" />
         </div>
